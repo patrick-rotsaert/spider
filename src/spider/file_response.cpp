@@ -1,0 +1,153 @@
+//
+// Copyright (C) 2023 Patrick Rotsaert
+// Distributed under the Boost Software License, Version 1.0.
+// (See accompanying file LICENSE or copy at
+// http://www.boost.org/LICENSE_1_0.txt)
+//
+
+#include "spider/file_response.h"
+#include "spider/error_response.h"
+#include "spider/tracked_file.h"
+#include "spider/ifile_event_listener.h"
+#include "spider/logging.h"
+#include "spider/formatters.h"
+
+#include <boost/beast/http/file_body.hpp>
+#include <boost/beast/http/empty_body.hpp>
+#include <boost/beast/version.hpp>
+#include <boost/filesystem/operations.hpp>
+
+namespace spider {
+
+namespace {
+
+beast::string_view mime_type(const boost::filesystem::path& path)
+{
+	const auto ext = path.extension().string();
+	using beast::iequals;
+	if (iequals(ext, ".htm"))
+		return "text/html";
+	if (iequals(ext, ".html"))
+		return "text/html";
+	if (iequals(ext, ".php"))
+		return "text/html";
+	if (iequals(ext, ".css"))
+		return "text/css";
+	if (iequals(ext, ".txt"))
+		return "text/plain";
+	if (iequals(ext, ".js"))
+		return "application/javascript";
+	if (iequals(ext, ".json"))
+		return "application/json";
+	if (iequals(ext, ".xml"))
+		return "application/xml";
+	if (iequals(ext, ".swf"))
+		return "application/x-shockwave-flash";
+	if (iequals(ext, ".flv"))
+		return "video/x-flv";
+	if (iequals(ext, ".png"))
+		return "image/png";
+	if (iequals(ext, ".jpe"))
+		return "image/jpeg";
+	if (iequals(ext, ".jpeg"))
+		return "image/jpeg";
+	if (iequals(ext, ".jpg"))
+		return "image/jpeg";
+	if (iequals(ext, ".gif"))
+		return "image/gif";
+	if (iequals(ext, ".bmp"))
+		return "image/bmp";
+	if (iequals(ext, ".ico"))
+		return "image/vnd.microsoft.icon";
+	if (iequals(ext, ".tiff"))
+		return "image/tiff";
+	if (iequals(ext, ".tif"))
+		return "image/tiff";
+	if (iequals(ext, ".svg"))
+		return "image/svg+xml";
+	if (iequals(ext, ".svgz"))
+		return "image/svg+xml";
+	return "application/text";
+}
+
+template<class FileBody, class CreateFile>
+file_response::response
+create_impl(const file_response::request& req, const boost::filesystem::path& doc_root, beast::string_view path, CreateFile&& create_file)
+{
+	const auto file_path = doc_root / std::string{ path };
+
+	const auto rel_path = boost::filesystem::relative(file_path, doc_root);
+	if (!rel_path.empty() && rel_path.begin()->filename_is_dot_dot())
+	{
+		SPIDER_LOG(err, "{} is not a child path of {}", file_path, doc_root);
+		return bad_request::create(req);
+	}
+
+	auto file = create_file();
+
+	auto ec = beast::error_code{};
+
+	file.open(file_path.c_str(), beast::file_mode::scan, ec);
+
+	if (ec)
+	{
+		SPIDER_LOG(err, "{}: {}", file_path.string(), ec.message());
+	}
+
+	// Handle the case where the file doesn't exist
+	if (ec == beast::errc::no_such_file_or_directory)
+	{
+		return not_found::create(req);
+	}
+
+	// Handle an unknown error
+	if (ec)
+	{
+		return internal_server_error::create(req);
+	}
+
+	auto body = typename FileBody::value_type();
+	body.reset(std::move(file), ec);
+
+	// Cache the size since we need it after the move
+	const auto size = body.size();
+
+	// Respond to HEAD request
+	if (req.method() == http::verb::head)
+	{
+		http::response<http::empty_body> res{ http::status::ok, req.version() };
+		res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+		res.set(http::field::content_type, mime_type(file_path));
+		res.content_length(size);
+		res.keep_alive(req.keep_alive());
+		return res;
+	}
+
+	// Respond to GET request
+	http::response<FileBody> res{ std::piecewise_construct,
+		                          std::make_tuple(std::move(body)),
+		                          std::make_tuple(http::status::ok, req.version()) };
+	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+	res.set(http::field::content_type, mime_type(file_path));
+	res.content_length(size);
+	res.keep_alive(req.keep_alive());
+	return res;
+}
+
+} // namespace
+
+file_response::response file_response::create(const request& req, const boost::filesystem::path& doc_root, beast::string_view path)
+{
+	return create_impl<http::file_body>(req, doc_root, path, []() { return http::file_body::file_type{}; });
+}
+
+file_response::response file_response::create(const request&                          req,
+                                              const boost::filesystem::path&          doc_root,
+                                              beast::string_view                      path,
+                                              std::unique_ptr<ifile_event_listener>&& event_listener)
+{
+	using tracked_file_body = http::basic_file_body<tracked_file>;
+	return create_impl<tracked_file_body>(req, doc_root, path, [&]() { return tracked_file_body::file_type{ std::move(event_listener) }; });
+}
+
+} // namespace spider

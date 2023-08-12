@@ -1,0 +1,38 @@
+//
+// Copyright (C) 2023 Patrick Rotsaert
+// Distributed under the Boost Software License, Version 1.0.
+// (See accompanying file LICENSE or copy at
+// http://www.boost.org/LICENSE_1_0.txt)
+//
+// clang-format off
+
+#pragma once
+
+#include "spider/api.h"
+
+#define SPIDER_VERSION_MAJOR ${${PROJECT_NAME}_VERSION_MAJOR}
+#define SPIDER_VERSION_MINOR ${${PROJECT_NAME}_VERSION_MINOR}
+#define SPIDER_VERSION_PATCH ${${PROJECT_NAME}_VERSION_PATCH}
+
+// Library version number
+// MMmmpppp
+// ->   MM = major
+// ->   mm = minor
+// -> pppp = patch
+#define SPIDER_VERSION_NUMBER ${${PROJECT_NAME}_VERSION_NUMBER}
+
+// clang-format on
+namespace spider {
+
+class SPIDER_EXPORT version
+{
+	static SPIDER_EXPORT int number(); // returns SPIDER_VERSION_NUMBER
+
+	static SPIDER_EXPORT int major(); // returns SPIDER_VERSION_MAJOR
+	static SPIDER_EXPORT int minor(); // returns SPIDER_VERSION_MINOR
+	static SPIDER_EXPORT int patch(); // returns SPIDER_VERSION_PATCH
+
+	static SPIDER_EXPORT void check(); // asserts that Version::number() == SPIDER_VERSION_NUMBER
+};
+
+} // namespace spider
