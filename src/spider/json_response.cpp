@@ -6,6 +6,7 @@
 //
 
 #include "spider/json_response.h"
+#include "spider/log_response.h"
 
 #include <boost/beast/version.hpp>
 
@@ -19,7 +20,7 @@ json_response::response spider::json_response::create_impl(const request& req, h
 	res.keep_alive(req.keep_alive());
 	res.body() = std::move(json);
 	res.prepare_payload();
-	return res;
+	return log_response(std::move(res));
 }
 
 } // namespace spider

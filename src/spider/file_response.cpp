@@ -11,6 +11,7 @@
 #include "spider/ifile_event_listener.h"
 #include "spider/logging.h"
 #include "spider/formatters.h"
+#include "spider/log_response.h"
 
 #include <boost/beast/http/file_body.hpp>
 #include <boost/beast/http/empty_body.hpp>
@@ -120,7 +121,7 @@ create_impl(const file_response::request& req, const boost::filesystem::path& do
 		res.set(http::field::content_type, mime_type(file_path));
 		res.content_length(size);
 		res.keep_alive(req.keep_alive());
-		return res;
+		return log_response(std::move(res));
 	}
 
 	// Respond to GET request

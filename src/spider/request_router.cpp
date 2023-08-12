@@ -69,7 +69,7 @@ public:
 
 	message_generator route_request(request&& req)
 	{
-		SPIDER_LOG(trace, "{}", fmt::streamed(req));
+		SPIDER_LOG(trace, "request:\n{}", fmt::streamed(req));
 
 		auto url = boost::urls::parse_origin_form(req.target());
 		if (url.has_error())

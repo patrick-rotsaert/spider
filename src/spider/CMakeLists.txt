@@ -63,6 +63,7 @@ add_project_library(${PROJECT_NAME}
 		ilogger.cpp
 		logging.cpp
 		formatters.h
+		log_response.cpp
 		version.cpp
 		version.h.in
 		config.h.in
@@ -80,6 +81,7 @@ add_project_library(${PROJECT_NAME}
 		ilogger.h
 		logging.h
 		log_level.h
+		log_response.h
 
 	PUBLIC_LIBRARIES
 		Boost::system

@@ -6,6 +6,7 @@
 //
 
 #include "spider/error_response.h"
+#include "spider/log_response.h"
 
 #include <boost/beast/version.hpp>
 
@@ -127,7 +128,7 @@ error_response_factory::create(const request& req, status status, const std::opt
 	res.keep_alive(req.keep_alive());
 	res.body() = html.value_or(stock_reply(status));
 	res.prepare_payload();
-	return res;
+	return log_response(std::move(res));
 }
 
 } // namespace spider
