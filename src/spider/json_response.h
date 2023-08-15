@@ -26,18 +26,31 @@ concept ConvertibleToBoostJson = boost::json::is_described_class<T>::value;
 class SPIDER_EXPORT json_response final
 {
 	static response create_impl(const request& req, http::status status, std::string&& json);
+	static response create_impl(http::status status, std::string&& json);
 
 public:
-	template<ConvertibleToBoostJson T>
+	template<typename T>
 	static response create(const request& req, http::status status, const T& data)
 	{
 		return create_impl(req, status, boost::json::serialize(boost::json::value_from(data)));
 	}
 
-	template<ConvertibleToBoostJson T>
+	template<typename T>
 	static response create(const request& req, http::status status, T&& data)
 	{
 		return create_impl(req, status, boost::json::serialize(boost::json::value_from(std::move(data))));
+	}
+
+	template<typename T>
+	static response create(http::status status, const T& data)
+	{
+		return create_impl(status, boost::json::serialize(boost::json::value_from(data)));
+	}
+
+	template<typename T>
+	static response create(http::status status, T&& data)
+	{
+		return create_impl(status, boost::json::serialize(boost::json::value_from(std::move(data))));
 	}
 };
 

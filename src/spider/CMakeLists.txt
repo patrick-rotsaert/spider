@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.19)
 
 # Boost.URL was added in version 1.82
-find_package(Boost 1.82.0 REQUIRED COMPONENTS system url filesystem json)
+find_package(Boost 1.82.0 REQUIRED COMPONENTS system url filesystem json date_time)
 
 include(FetchContent)
 
@@ -63,6 +63,7 @@ add_project_library(${PROJECT_NAME}
 		ilogger.cpp
 		logging.cpp
 		formatters.h
+		conversions.cpp
 		log_response.cpp
 		demangle.cpp
 		demangle.h
@@ -82,7 +83,9 @@ add_project_library(${PROJECT_NAME}
 		error_response.h
 		ifile_event_listener.h
 		noop_file_event_listener.h
-		dispatcher.h
+		dispatcher.hpp
+		controller.hpp
+		conversions.h
 		ilogger.h
 		logging.h
 		log_level.h
@@ -93,6 +96,7 @@ add_project_library(${PROJECT_NAME}
 		Boost::url
 		Boost::filesystem
 		Boost::json
+		Boost::date_time
 		fmt::fmt
 
 	# PRIVATE_LIBRARIES

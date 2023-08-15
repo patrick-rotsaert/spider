@@ -111,10 +111,8 @@ create_impl(const request& req, const boost::filesystem::path& doc_root, beast::
 	auto body = typename FileBody::value_type();
 	body.reset(std::move(file), ec);
 
-	// Cache the size since we need it after the move
 	const auto size = body.size();
 
-	// Respond to HEAD request
 	if (req.method() == verb::head)
 	{
 		http::response<http::empty_body> res{ http::status::ok, req.version() };
@@ -125,7 +123,6 @@ create_impl(const request& req, const boost::filesystem::path& doc_root, beast::
 		return log_response(std::move(res));
 	}
 
-	// Respond to GET request
 	http::response<FileBody> res{ std::piecewise_construct, std::make_tuple(std::move(body)), std::make_tuple(status::ok, req.version()) };
 	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
 	res.set(http::field::content_type, mime_type(file_path));
@@ -134,12 +131,55 @@ create_impl(const request& req, const boost::filesystem::path& doc_root, beast::
 	return res;
 }
 
-} // namespace
-
-message_generator file_response::create(const request& req, const boost::filesystem::path& doc_root, string_view path)
+template<class FileBody, class CreateFile>
+response_wrapper create_impl(const boost::filesystem::path& doc_root, beast::string_view path, CreateFile&& create_file)
 {
-	return create_impl<http::file_body>(req, doc_root, path, []() { return http::file_body::file_type{}; });
+	const auto file_path = doc_root / std::string{ path };
+
+	const auto rel_path = boost::filesystem::relative(file_path, doc_root);
+	if (!rel_path.empty() && rel_path.begin()->filename_is_dot_dot())
+	{
+		SPIDER_LOG(err, "{} is not a child path of {}", file_path, doc_root);
+		return bad_request::create();
+	}
+
+	auto file = create_file();
+
+	auto ec = beast::error_code{};
+
+	file.open(file_path.c_str(), beast::file_mode::scan, ec);
+
+	if (ec)
+	{
+		SPIDER_LOG(err, "{}: {}", file_path.string(), ec.message());
+	}
+
+	// Handle the case where the file doesn't exist
+	if (ec == beast::errc::no_such_file_or_directory)
+	{
+		return not_found::create();
+	}
+
+	// Handle an unknown error
+	if (ec)
+	{
+		return internal_server_error::create();
+	}
+
+	auto body = typename FileBody::value_type();
+	body.reset(std::move(file), ec);
+
+	const auto size = body.size();
+
+	http::response<FileBody> res{ std::piecewise_construct, std::make_tuple(std::move(body)) };
+	res.result(status::ok);
+	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+	res.set(http::field::content_type, mime_type(file_path));
+	res.content_length(size);
+	return res;
 }
+
+} // namespace
 
 message_generator file_response::create(const request&                          req,
                                         const boost::filesystem::path&          doc_root,
@@ -148,6 +188,22 @@ message_generator file_response::create(const request&                          
 {
 	using tracked_file_body = http::basic_file_body<tracked_file>;
 	return create_impl<tracked_file_body>(req, doc_root, path, [&]() { return tracked_file_body::file_type{ std::move(event_listener) }; });
+}
+
+message_generator file_response::create(const request& req, const fs::path& doc_root, string_view path)
+{
+	return create_impl<http::file_body>(req, doc_root, path, []() { return http::file_body::file_type{}; });
+}
+
+response_wrapper file_response::create(const fs::path& doc_root, string_view path, std::unique_ptr<ifile_event_listener>&& event_listener)
+{
+	using tracked_file_body = http::basic_file_body<tracked_file>;
+	return create_impl<tracked_file_body>(doc_root, path, [&]() { return tracked_file_body::file_type{ std::move(event_listener) }; });
+}
+
+response_wrapper file_response::create(const fs::path& doc_root, string_view path)
+{
+	return create_impl<http::file_body>(doc_root, path, []() { return http::file_body::file_type{}; });
 }
 
 } // namespace spider

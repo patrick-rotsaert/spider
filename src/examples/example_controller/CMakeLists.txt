@@ -5,10 +5,8 @@
 # http://www.boost.org/LICENSE_1_0.txt)
 #
 
-if(NOT ${PROJECT_NAME_UC}_BUILD_EXAMPLES)
-	return()
-endif()
+set(TARGET example_controller)
+add_executable(${TARGET} example_controller.cpp)
 
-add_subdirectory(example_server)
-add_subdirectory(example_dispatcher)
-add_subdirectory(example_controller)
+target_compile_features(${TARGET} PRIVATE cxx_std_20)
+target_link_libraries(${TARGET} PRIVATE spider::spider)

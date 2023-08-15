@@ -19,6 +19,7 @@ class SPIDER_EXPORT error_response_factory final
 {
 public:
 	static response create(const request& req, http::status status, const std::optional<string_view>& html = std::nullopt);
+	static response create(http::status status, const std::optional<string_view>& html = std::nullopt);
 };
 
 template<http::status status>
@@ -28,6 +29,11 @@ public:
 	static response create(const request& req)
 	{
 		return error_response_factory::create(req, status);
+	}
+
+	static response create()
+	{
+		return error_response_factory::create(status);
 	}
 };
 

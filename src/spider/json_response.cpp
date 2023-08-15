@@ -23,4 +23,15 @@ response spider::json_response::create_impl(const request& req, http::status sta
 	return log_response(std::move(res));
 }
 
+response json_response::create_impl(http::status status, std::string&& json)
+{
+	auto res = response{};
+	res.result(status);
+	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+	res.set(http::field::content_type, "application/json");
+	res.body() = std::move(json);
+	res.prepare_payload();
+	return log_response(std::move(res));
+}
+
 } // namespace spider

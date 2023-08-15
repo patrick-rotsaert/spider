@@ -5,7 +5,7 @@
 // http://www.boost.org/LICENSE_1_0.txt)
 //
 
-// Code in this file is based on https://github.com/mhekkel/libzeep,
+// Code in this file is inspired by https://github.com/mhekkel/libzeep,
 // a very old version of it in fact, I think 3.something.
 
 // Copyright Maarten L. Hekkelman, Radboud University 2008-2012.
@@ -204,7 +204,7 @@ struct handler_traits<message_generator (Class::*)(request&&)>
 };
 
 // all the other specializations are specified at the bottom of this file
-#define BOOST_PP_FILENAME_1 <spider/dispatcher.h>
+#define BOOST_PP_FILENAME_1 <spider/dispatcher.hpp>
 #define BOOST_PP_ITERATION_LIMITS (1, 9) // FIXME make the upper limit configurable
 #include BOOST_PP_ITERATE()
 
@@ -289,7 +289,7 @@ struct dispatcher
 		auto handler = std::make_shared<detail::handler<Class, Method>>(object, method, arg);
 		router->add_route(std::move(methods),
 		                  std::move(pattern),
-		                  [handler = handler](request&& req, boost::urls::url_view&& url, beast::string_view path, const svmatch& match) {
+		                  [handler = handler](request&& req, url_view&& url, string_view path, const svmatch& match) {
 			                  return handler->call(std::move(req), std::move(url), path, match);
 		                  });
 	}

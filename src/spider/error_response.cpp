@@ -129,4 +129,15 @@ response error_response_factory::create(const request& req, status status, const
 	return log_response(std::move(res));
 }
 
+response error_response_factory::create(http::status status, const std::optional<string_view>& html)
+{
+	auto res = response{};
+	res.result(status);
+	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+	res.set(http::field::content_type, "text/html");
+	res.body() = html.value_or(stock_reply(status));
+	res.prepare_payload();
+	return log_response(std::move(res));
+}
+
 } // namespace spider
