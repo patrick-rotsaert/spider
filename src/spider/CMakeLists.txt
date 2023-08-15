@@ -64,12 +64,16 @@ add_project_library(${PROJECT_NAME}
 		logging.cpp
 		formatters.h
 		log_response.cpp
+		demangle.cpp
+		demangle.h
+		demangled_type_name.h
 		version.cpp
 		version.h.in
 		config.h.in
 	PUBLIC_HEADERS
 		api.h
 		aliases.h
+		message.h
 		listener.h
 		irequest_handler.h
 		request_router.h
@@ -78,6 +82,7 @@ add_project_library(${PROJECT_NAME}
 		error_response.h
 		ifile_event_listener.h
 		noop_file_event_listener.h
+		dispatcher.h
 		ilogger.h
 		logging.h
 		log_level.h
@@ -137,3 +142,9 @@ if(${PROJECT_NAME_UC}_INSTALL)
 	install_project_header(${CMAKE_CURRENT_BINARY_DIR}/version.h ${CMAKE_CURRENT_BINARY_DIR}/..)
 	install_project_header(${CMAKE_CURRENT_BINARY_DIR}/config.h ${CMAKE_CURRENT_BINARY_DIR}/..)
 endif()
+
+
+### FIXME: REMOVE
+add_executable(json_test json_test.cpp)
+target_link_libraries(json_test Boost::json)
+target_compile_features(json_test PRIVATE cxx_std_20)

@@ -20,8 +20,6 @@
 
 namespace spider {
 
-using message_generator = http::message_generator;
-
 using namespace std::chrono_literals;
 
 namespace {

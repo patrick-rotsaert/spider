@@ -4,3 +4,4 @@
 /compile_commands.json
 /.pat
 /_build/
+src/spider/json_test.cpp

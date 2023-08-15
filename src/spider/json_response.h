@@ -8,29 +8,23 @@
 #pragma once
 
 #include "spider/aliases.h"
+#include "spider/message.h"
 #include "spider/api.h"
 
-#include <boost/beast/http/message.hpp>
-#include <boost/beast/http/string_body.hpp>
 #include <boost/json.hpp>
 
 #include <concepts>
 
 namespace spider {
 
+// FIXME: this should use a type trait like is_tag_invoked or similar,
+// but I did not yet find a way to do it.
+// Settle for is_described_class now.
 template<typename T>
-concept ConvertibleToBoostJson = requires(const T& in)
-{
-	{
-		boost::json::value_from(in)
-		} -> std::same_as<boost::json::value>;
-};
+concept ConvertibleToBoostJson = boost::json::is_described_class<T>::value;
 
 class SPIDER_EXPORT json_response final
 {
-	using response = http::response<http::string_body>;
-	using request  = http::request<http::string_body>;
-
 	static response create_impl(const request& req, http::status status, std::string&& json);
 
 public:

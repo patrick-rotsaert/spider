@@ -13,9 +13,10 @@
 #include "spider/formatters.h"
 #include "spider/log_response.h"
 
+#include <boost/beast/http/message_generator.hpp>
 #include <boost/beast/http/file_body.hpp>
-#include <boost/beast/http/empty_body.hpp>
 #include <boost/beast/version.hpp>
+#include <boost/filesystem/path.hpp>
 #include <boost/filesystem/operations.hpp>
 
 namespace spider {
@@ -72,8 +73,8 @@ beast::string_view mime_type(const boost::filesystem::path& path)
 }
 
 template<class FileBody, class CreateFile>
-file_response::response
-create_impl(const file_response::request& req, const boost::filesystem::path& doc_root, beast::string_view path, CreateFile&& create_file)
+message_generator
+create_impl(const request& req, const boost::filesystem::path& doc_root, beast::string_view path, CreateFile&& create_file)
 {
 	const auto file_path = doc_root / std::string{ path };
 
@@ -114,7 +115,7 @@ create_impl(const file_response::request& req, const boost::filesystem::path& do
 	const auto size = body.size();
 
 	// Respond to HEAD request
-	if (req.method() == http::verb::head)
+	if (req.method() == verb::head)
 	{
 		http::response<http::empty_body> res{ http::status::ok, req.version() };
 		res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
@@ -125,9 +126,7 @@ create_impl(const file_response::request& req, const boost::filesystem::path& do
 	}
 
 	// Respond to GET request
-	http::response<FileBody> res{ std::piecewise_construct,
-		                          std::make_tuple(std::move(body)),
-		                          std::make_tuple(http::status::ok, req.version()) };
+	http::response<FileBody> res{ std::piecewise_construct, std::make_tuple(std::move(body)), std::make_tuple(status::ok, req.version()) };
 	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
 	res.set(http::field::content_type, mime_type(file_path));
 	res.content_length(size);
@@ -137,15 +136,15 @@ create_impl(const file_response::request& req, const boost::filesystem::path& do
 
 } // namespace
 
-file_response::response file_response::create(const request& req, const boost::filesystem::path& doc_root, beast::string_view path)
+message_generator file_response::create(const request& req, const boost::filesystem::path& doc_root, string_view path)
 {
 	return create_impl<http::file_body>(req, doc_root, path, []() { return http::file_body::file_type{}; });
 }
 
-file_response::response file_response::create(const request&                          req,
-                                              const boost::filesystem::path&          doc_root,
-                                              beast::string_view                      path,
-                                              std::unique_ptr<ifile_event_listener>&& event_listener)
+message_generator file_response::create(const request&                          req,
+                                        const boost::filesystem::path&          doc_root,
+                                        string_view                             path,
+                                        std::unique_ptr<ifile_event_listener>&& event_listener)
 {
 	using tracked_file_body = http::basic_file_body<tracked_file>;
 	return create_impl<tracked_file_body>(req, doc_root, path, [&]() { return tracked_file_body::file_type{ std::move(event_listener) }; });

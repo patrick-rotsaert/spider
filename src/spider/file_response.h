@@ -9,12 +9,8 @@
 
 #include "spider/ifile_event_listener.h"
 #include "spider/aliases.h"
+#include "spider/message.h"
 #include "spider/api.h"
-
-#include <boost/beast/http/message.hpp>
-#include <boost/beast/http/string_body.hpp>
-#include <boost/beast/http/message_generator.hpp>
-#include <boost/filesystem/path.hpp>
 
 #include <memory>
 
@@ -23,14 +19,9 @@ namespace spider {
 class SPIDER_EXPORT file_response final
 {
 public:
-	using request  = http::request<http::string_body>;
-	using response = http::message_generator;
-
-	static response create(const request& req, const boost::filesystem::path& doc_root, beast::string_view path);
-	static response create(const request&                          req,
-	                       const boost::filesystem::path&          doc_root,
-	                       beast::string_view                      path,
-	                       std::unique_ptr<ifile_event_listener>&& event_listener);
+	static message_generator create(const request& req, const fs::path& doc_root, string_view path);
+	static message_generator
+	create(const request& req, const fs::path& doc_root, string_view path, std::unique_ptr<ifile_event_listener>&& event_listener);
 };
 
 } // namespace spider

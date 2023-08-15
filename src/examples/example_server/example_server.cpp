@@ -27,8 +27,6 @@
 #include <iostream>
 #include <iomanip>
 
-#include <regex>
-
 using namespace fmt::literals;
 
 class file_event_listener final : public spider::noop_file_event_listener
@@ -70,10 +68,6 @@ int main(int argc, char* argv[])
 	auto const threads  = std::max<int>(1, std::atoi(argv[4]));
 
 	using namespace spider;
-	using beast::error_code;
-	using beast::string_view;
-	using beast::http::status;
-	using beast::http::verb;
 
 #ifdef SPIDER_USE_SPDLOG
 	spdlog::set_level(spdlog::level::trace);
@@ -89,7 +83,7 @@ int main(int argc, char* argv[])
 
 	auto api_router = std::make_shared<request_router>();
 	api_router->add_route(
-	    verb::get, std::regex{ R"~(^customer/(\d{1,18})/?)~" }, [&](auto&& req, auto&& url, auto path, const auto& match) {
+	    verb::get, boost::regex{ R"~(^customer/(\d{1,18})/?$)~" }, [&](auto&& req, auto&& url, auto path, const auto& match) {
 		    slog(debug, "api get customer '{}'", path);
 		    assert(match.size() == 1 + 1); // match.size() is the number of marked subexpressions plus 1
 		    const auto customer_id = std::stoull(string_view{ match[1].first, match[1].second });
@@ -98,7 +92,7 @@ int main(int argc, char* argv[])
 		    return json_response::create(req, status::ok, std::move(c));
 	    });
 	api_router->add_json_route<customer>(verb::post,
-	                                     std::regex{ R"~(^customer/?)~" },
+	                                     boost::regex{ R"~(^customer/?$)~" },
 	                                     [&](auto&& req, auto&& url, auto path, const auto& match, boost::json::result<customer>&& data) {
 		                                     if (data.has_error())
 		                                     {
@@ -111,9 +105,9 @@ int main(int argc, char* argv[])
 	                                     });
 
 	auto router = std::make_shared<request_router>();
-	router->add_route(std::regex{ R"~(^api/)~" }, api_router);
+	router->add_route(boost::regex{ R"~(^api/)~" }, api_router);
 	router->add_route(
-	    { verb::get, verb::head }, std::regex{ R"~(^files/(.+)/?$)~" }, [&](auto&& req, auto&& url, auto path, const auto& match) {
+	    { verb::get, verb::head }, boost::regex{ R"~(^files/(.+)/?$)~" }, [&](auto&& req, auto&& url, auto path, const auto& match) {
 		    slog(debug, "files {}", path);
 		    assert(match.size() == 1 + 1); // match.size() is the number of marked subexpressions plus 1
 		    const auto file_path = string_view{ match[1].first, match[1].second };

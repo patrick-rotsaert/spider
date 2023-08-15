@@ -11,23 +11,24 @@
 #include "spider/aliases.h"
 #include "spider/api.h"
 
+#include <boost/beast/http/message_generator.hpp>
 #include <boost/url/url_view.hpp>
 #include <boost/json.hpp>
+#include <boost/regex.hpp>
 
 #include <memory>
 #include <regex>
 #include <set>
 #include <functional>
+#include <concepts>
 
 namespace spider {
 
+// FIXME: this should use a type trait like is_tag_invoked or similar,
+// but I did not yet find a way to do it.
+// Settle for is_described_class now.
 template<typename T>
-concept ConvertibleFromBoostJson = requires(const T& in)
-{
-	{
-		boost::json::value_to<T>(boost::json::value{})
-		} -> std::same_as<T>;
-};
+concept ConvertibleFromBoostJson = boost::json::is_described_class<T>::value;
 
 class SPIDER_EXPORT request_router : public irequest_handler
 {
@@ -35,13 +36,8 @@ class SPIDER_EXPORT request_router : public irequest_handler
 	std::unique_ptr<impl> pimpl_;
 	friend impl; // allow impl to call private method route_request
 
-	using verb              = http::verb;
-	using request           = irequest_handler::request;
-	using url_view          = boost::urls::url_view;
-	using string_view       = beast::string_view;
-	using svmatch           = std::match_results<string_view::const_iterator>;
-	using message_generator = http::message_generator;
-	using request_handler   = std::function<message_generator(request&& req, url_view&& url, string_view path, const svmatch& match)>;
+	using svmatch         = boost::match_results<string_view::const_iterator>;
+	using request_handler = std::function<message_generator(request&& req, url_view&& url, string_view path, const svmatch& match)>;
 	template<ConvertibleFromBoostJson T>
 	using json_request_handler = std::function<
 	    message_generator(request&& req, url_view&& url, string_view path, const svmatch& match, boost::json::result<T>&& data)>;
@@ -53,17 +49,17 @@ public:
 	request_router();
 	~request_router() noexcept override;
 
-	void add_route(std::set<verb>&& methods, std::regex&& pattern, request_handler&& handler);
-	void add_route(std::set<verb>&& methods, std::regex&& pattern, const std::shared_ptr<request_router>& router);
+	void add_route(std::set<verb>&& methods, boost::regex&& pattern, request_handler&& handler);
+	void add_route(std::set<verb>&& methods, boost::regex&& pattern, const std::shared_ptr<request_router>& router);
 
-	void add_route(verb method, std::regex&& pattern, request_handler&& handler);
-	void add_route(verb method, std::regex&& pattern, const std::shared_ptr<request_router>& router);
+	void add_route(verb method, boost::regex&& pattern, request_handler&& handler);
+	void add_route(verb method, boost::regex&& pattern, const std::shared_ptr<request_router>& router);
 
-	void add_route(std::regex&& pattern, request_handler&& handler);
-	void add_route(std::regex&& pattern, const std::shared_ptr<request_router>& router);
+	void add_route(boost::regex&& pattern, request_handler&& handler);
+	void add_route(boost::regex&& pattern, const std::shared_ptr<request_router>& router);
 
 	template<ConvertibleFromBoostJson T>
-	void add_json_route(std::set<verb>&& methods, std::regex&& pattern, json_request_handler<T>&& handler)
+	void add_json_route(std::set<verb>&& methods, boost::regex&& pattern, json_request_handler<T>&& handler)
 	{
 		this->add_route(
 		    std::move(methods),
@@ -85,13 +81,13 @@ public:
 	}
 
 	template<ConvertibleFromBoostJson T>
-	void add_json_route(verb method, std::regex&& pattern, json_request_handler<T>&& handler)
+	void add_json_route(verb method, boost::regex&& pattern, json_request_handler<T>&& handler)
 	{
 		this->add_json_route<T>(std::set<verb>{ method }, std::move(pattern), std::move(handler));
 	}
 
 	template<ConvertibleFromBoostJson T>
-	void add_json_route(std::regex&& pattern, json_request_handler<T>&& handler)
+	void add_json_route(boost::regex&& pattern, json_request_handler<T>&& handler)
 	{
 		this->add_json_route<T>(std::set<verb>{}, std::move(pattern), std::move(handler));
 	}

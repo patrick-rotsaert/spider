@@ -8,10 +8,8 @@
 #pragma once
 
 #include "spider/aliases.h"
+#include "spider/message.h"
 #include "spider/api.h"
-
-#include <boost/beast/http/message.hpp>
-#include <boost/beast/http/string_body.hpp>
 
 #include <optional>
 
@@ -19,19 +17,13 @@ namespace spider {
 
 class SPIDER_EXPORT error_response_factory final
 {
-	using response = http::response<http::string_body>;
-	using request  = http::request<http::string_body>;
-
 public:
-	static response create(const request& req, http::status status, const std::optional<beast::string_view>& html = std::nullopt);
+	static response create(const request& req, http::status status, const std::optional<string_view>& html = std::nullopt);
 };
 
 template<http::status status>
 class error_response
 {
-	using response = http::response<http::string_body>;
-	using request  = http::request<http::string_body>;
-
 public:
 	static response create(const request& req)
 	{
@@ -39,8 +31,9 @@ public:
 	}
 };
 
-using bad_request           = error_response<http::status::bad_request>;
-using not_found             = error_response<http::status::not_found>;
-using internal_server_error = error_response<http::status::internal_server_error>;
+using bad_request           = error_response<status::bad_request>;
+using not_found             = error_response<status::not_found>;
+using internal_server_error = error_response<status::internal_server_error>;
+using not_implemented       = error_response<status::not_implemented>;
 
 } // namespace spider

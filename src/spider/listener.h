@@ -7,12 +7,9 @@
 
 #pragma once
 
-#include "spider/aliases.h"
 #include "spider/irequest_handler.h"
+#include "spider/aliases.h"
 #include "spider/api.h"
-
-#include <boost/beast/core/error.hpp>
-#include <boost/asio/io_context.hpp>
 
 #include <string_view>
 #include <cstdint>

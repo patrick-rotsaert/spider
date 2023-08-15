@@ -6,6 +6,7 @@
 //
 
 #include "spider/error_response.h"
+#include "spider/message.h"
 #include "spider/log_response.h"
 
 #include <boost/beast/version.hpp>
@@ -18,9 +19,7 @@ namespace spider {
 
 namespace {
 
-using http::status;
-
-std::string make_stock_reply(status status)
+std::string make_stock_reply(http::status status)
 {
 	const auto         phrase = http::obsolete_reason(status);
 	std::ostringstream out;
@@ -119,8 +118,7 @@ boost::beast::string_view stock_reply(status status)
 
 } // namespace
 
-error_response_factory::response
-error_response_factory::create(const request& req, status status, const std::optional<beast::string_view>& html)
+response error_response_factory::create(const request& req, status status, const std::optional<string_view>& html)
 {
 	auto res = response{ status, req.version() };
 	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);

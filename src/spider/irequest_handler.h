@@ -8,19 +8,14 @@
 #pragma once
 
 #include "spider/aliases.h"
+#include "spider/message.h"
 #include "spider/api.h"
-
-#include <boost/beast/http/message.hpp>
-#include <boost/beast/http/string_body.hpp>
-#include <boost/beast/http/message_generator.hpp>
 
 namespace spider {
 
 class SPIDER_EXPORT irequest_handler
 {
 public:
-	using request = http::request<http::string_body>;
-
 	irequest_handler();
 	virtual ~irequest_handler() noexcept;
 
@@ -29,7 +24,7 @@ public:
 	irequest_handler(irequest_handler&&)                 = default;
 	irequest_handler& operator=(irequest_handler&&)      = default;
 
-	virtual http::message_generator handle_request(request&& req) = 0;
+	virtual message_generator handle_request(request&& req) = 0;
 };
 
 } // namespace spider

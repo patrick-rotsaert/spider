@@ -21,19 +21,15 @@
 
 namespace spider {
 
-namespace {
-
-} // namespace
-
 class request_router::impl
 {
 	struct route
 	{
-		std::set<http::verb>            methods;
-		std::regex                      pattern;
+		std::set<verb>                  methods;
+		boost::regex                    pattern;
 		request_router::request_handler handler;
 
-		route(std::set<http::verb>&& methods, std::regex&& pattern, request_router::request_handler&& handler)
+		route(std::set<verb>&& methods, boost::regex&& pattern, request_router::request_handler&& handler)
 		    : methods{ std::move(methods) }
 		    , pattern{ std::move(pattern) }
 		    , handler{ std::move(handler) }
@@ -57,7 +53,7 @@ public:
 			if (route.methods.empty() || route.methods.count(req.method()) > 0u)
 			{
 				auto match = svmatch{};
-				if (std::regex_search(path.begin(), path.end(), match, route.pattern))
+				if (boost::regex_search(path.begin(), path.end(), match, route.pattern))
 				{
 					return route.handler(std::move(req), std::move(url), path, match);
 				}
@@ -84,12 +80,12 @@ public:
 		}
 	}
 
-	void add_route(std::set<verb>&& methods, std::regex&& pattern, request_handler&& handler)
+	void add_route(std::set<verb>&& methods, boost::regex&& pattern, request_handler&& handler)
 	{
 		this->routes_.emplace_back(std::move(methods), std::move(pattern), std::move(handler));
 	}
 
-	void add_route(std::set<verb>&& methods, std::regex&& pattern, const std::shared_ptr<request_router>& router)
+	void add_route(std::set<verb>&& methods, boost::regex&& pattern, const std::shared_ptr<request_router>& router)
 	{
 		this->routes_.emplace_back(
 		    std::move(methods), std::move(pattern), [r = router](request&& req, url_view&& url, string_view path, const svmatch& match) {
@@ -110,42 +106,42 @@ request_router::~request_router() noexcept
 {
 }
 
-request_router::message_generator request_router::route_request(request&& req, url_view&& url, string_view path)
+message_generator request_router::route_request(request&& req, url_view&& url, string_view path)
 {
 	return this->pimpl_->route_request(std::move(req), std::move(url), path);
 }
 
-request_router::message_generator request_router::handle_request(request&& req)
+message_generator request_router::handle_request(request&& req)
 {
 	return this->pimpl_->route_request(std::move(req));
 }
 
-void request_router::add_route(std::set<verb>&& methods, std::regex&& pattern, request_handler&& handler)
+void request_router::add_route(std::set<verb>&& methods, boost::regex&& pattern, request_handler&& handler)
 {
 	return this->pimpl_->add_route(std::move(methods), std::move(pattern), std::move(handler));
 }
 
-void request_router::add_route(std::set<verb>&& methods, std::regex&& pattern, const std::shared_ptr<request_router>& router)
+void request_router::add_route(std::set<verb>&& methods, boost::regex&& pattern, const std::shared_ptr<request_router>& router)
 {
 	return this->pimpl_->add_route(std::move(methods), std::move(pattern), router);
 }
 
-void request_router::add_route(verb method, std::regex&& pattern, request_handler&& handler)
+void request_router::add_route(verb method, boost::regex&& pattern, request_handler&& handler)
 {
 	return this->pimpl_->add_route({ method }, std::move(pattern), std::move(handler));
 }
 
-void request_router::add_route(verb method, std::regex&& pattern, const std::shared_ptr<request_router>& router)
+void request_router::add_route(verb method, boost::regex&& pattern, const std::shared_ptr<request_router>& router)
 {
 	return this->pimpl_->add_route({ method }, std::move(pattern), router);
 }
 
-void request_router::add_route(std::regex&& pattern, request_handler&& handler)
+void request_router::add_route(boost::regex&& pattern, request_handler&& handler)
 {
 	return this->pimpl_->add_route({}, std::move(pattern), std::move(handler));
 }
 
-void request_router::add_route(std::regex&& pattern, const std::shared_ptr<request_router>& router)
+void request_router::add_route(boost::regex&& pattern, const std::shared_ptr<request_router>& router)
 {
 	return this->pimpl_->add_route({}, std::move(pattern), router);
 }
