@@ -24,6 +24,7 @@
 #include "spider/formatters.h"
 
 #include <boost/beast/core/string.hpp>
+#include <boost/throw_exception.hpp>
 
 #include <fmt/format.h>
 
@@ -60,11 +61,37 @@ struct request_parameter
 {
 };
 
+struct url_parameter
+{
+};
+
 class controller
 {
+public:
+	struct p
+	{
+		using path    = path_parameter;
+		using query   = query_parameter;
+		using header  = header_parameter;
+		using json    = json_body;
+		using request = request_parameter;
+		using url     = url_parameter;
+	};
+
+	class exception_handler_base
+	{
+	public:
+		virtual ~exception_handler_base()
+		{
+		}
+
+		virtual response handle(const std::exception& e, const request& req) = 0;
+	};
+
+private:
 	using svmatch = boost::match_results<string_view::const_iterator>;
 
-	using parameter_descriptor = std::variant<path_parameter, query_parameter, header_parameter, json_body, request_parameter>;
+	using parameter_descriptor = std::variant<p::path, p::query, p::header, p::json, p::request, p::url>;
 
 	struct parameter_sources
 	{
@@ -112,7 +139,7 @@ class controller
 			auto dispatcher = dynamic_cast<Dispatcher*>(owner);
 			if (dispatcher == nullptr)
 			{
-				throw std::runtime_error("Callback must be provided by a class derived from dispatcher");
+				BOOST_THROW_EXCEPTION(std::invalid_argument{ "Callback must be provided by a class derived from dispatcher" });
 			}
 
 			this->callback_ = [dispatcher, method](Args... args) { return (dispatcher->*method)(args...); };
@@ -125,9 +152,49 @@ class controller
 					this->descriptors_[i++] = name;
 				}
 			}
+
+			validate_descriptors(std::make_index_sequence<N>());
 		}
 
-		ResultType call(const parameter_sources& sources)
+		template<std::size_t... I>
+		void validate_descriptors(std::index_sequence<I...>)
+		{
+			((validate_descriptor<typename std::tuple_element_t<I, ArgsTuple>>(this->descriptors_[I])), ...);
+		}
+
+		template<typename T>
+		void validate_descriptor(const parameter_descriptor& descriptor)
+		{
+			auto ok = false;
+			if constexpr (std::is_same_v<T, request>)
+			{
+				ok = std::holds_alternative<p::request>(descriptor);
+			}
+			else if constexpr (std::is_same_v<T, url_view>)
+			{
+				ok = std::holds_alternative<p::url>(descriptor);
+			}
+			else if constexpr (ConvertibleFromBoostJson<T>)
+			{
+				ok = std::holds_alternative<p::json>(descriptor);
+			}
+			else
+			{
+				ok = std::holds_alternative<p::path>(descriptor) || std::holds_alternative<p::query>(descriptor) ||
+				     std::holds_alternative<p::header>(descriptor);
+			}
+
+			if (!ok)
+			{
+				const auto descriptor_type_name = std::visit([](auto&& arg) { return demangled_type_name(arg); }, descriptor);
+				BOOST_THROW_EXCEPTION(std::logic_error{ fmt::format("Descriptor type {} is incompatible with argument type {} for method{}",
+				                                                    descriptor_type_name,
+				                                                    demangled_type_name<T>(),
+				                                                    demangled_type_name<Method>()) });
+			}
+		}
+
+		response_wrapper call(const parameter_sources& sources)
 		{
 			try
 			{
@@ -155,107 +222,117 @@ class controller
 		}
 
 		template<typename T>
-		T collect_argument(const parameter_sources& sources, const parameter_descriptor& descriptor, const T* const tag)
+		std::enable_if_t<!std::is_pointer_v<T>, T>
+		collect_argument(const parameter_sources& sources, const parameter_descriptor& descriptor, const T* const tag)
 		{
-			return std::visit(
-			    [&](auto&& p) -> T {
+			auto [found, name, value] = std::visit(
+			    [&](auto&& p)
+			        -> std::tuple<bool, std::string_view, std::variant<string_view, std::string_view, std::string, std::nullptr_t>> {
 				    using P = std::decay_t<decltype(p)>;
-				    if constexpr (std::is_same_v<P, path_parameter> && !ConvertibleFromBoostJson<T> && !std::is_pointer_v<T>)
+				    if constexpr (std::is_same_v<P, p::path>)
 				    {
 					    const auto& m = sources.match[p.name];
 					    if (m.matched)
 					    {
-						    const auto sv = std::string_view{ m.first, m.second };
-						    try
-						    {
-							    return get_argument(sv, tag);
-						    }
-						    catch (const std::exception& e)
-						    {
-							    throw argument_error{ fmt::format("'{}': could not convert {} to {}: {}",
-								                                  p.name,
-								                                  fmt::streamed(std::quoted(sv)),
-								                                  demangled_type_name<T>(),
-								                                  e.what()) };
-						    }
+						    return std::make_tuple(true, p.name, std::string_view{ m.first, m.second });
+					    }
+					    else
+					    {
+						    return std::make_tuple(false, p.name, nullptr);
 					    }
 				    }
-				    else if constexpr (std::is_same_v<P, query_parameter> && !ConvertibleFromBoostJson<T> && !std::is_pointer_v<T>)
+				    else if constexpr (std::is_same_v<P, p::query>)
 				    {
 					    const auto it = sources.url.params().find(p.name);
 					    if (it != sources.url.params().end())
 					    {
-						    const auto& sv = (*it).value;
-						    try
-						    {
-							    return get_argument(sv, tag);
-						    }
-						    catch (const std::exception& e)
-						    {
-							    throw argument_error{ fmt::format("'{}': could not convert {} to {}: {}",
-								                                  p.name,
-								                                  fmt::streamed(std::quoted(sv)),
-								                                  demangled_type_name<T>(),
-								                                  e.what()) };
-						    }
+						    return std::make_tuple(true, p.name, (*it).value);
+					    }
+					    else
+					    {
+						    return std::make_tuple(false, p.name, nullptr);
 					    }
 				    }
-				    else if constexpr (std::is_same_v<P, header_parameter> && !ConvertibleFromBoostJson<T> && !std::is_pointer_v<T>)
+				    else if constexpr (std::is_same_v<P, p::header>)
 				    {
 					    const auto it = sources.req.find(p.name);
 					    if (it != sources.req.end())
 					    {
-						    // TODO: check if the value can be obtained from the iterator, to avoid the second lookup.
-						    //auto sv = string_view{ *it };
-						    auto sv = sources.req[p.name];
-						    try
-						    {
-							    return get_argument(sv, tag);
-						    }
-						    catch (const std::exception& e)
-						    {
-							    throw argument_error{ fmt::format("'{}': could not convert {} to {}: {}",
-								                                  p.name,
-								                                  fmt::streamed(std::quoted(std::string{ sv })),
-								                                  demangled_type_name<T>(),
-								                                  e.what()) };
-						    }
+						    return std::make_tuple(true, p.name, sources.req[p.name]);
 					    }
-				    }
-				    else if constexpr (std::is_same_v<P, json_body> && ConvertibleFromBoostJson<T> && !std::is_pointer_v<T>)
-				    {
-					    try
+					    else
 					    {
-						    return boost::json::value_to<T>(boost::json::parse(sources.req.body()));
-					    }
-					    catch (const std::exception& e)
-					    {
-						    throw argument_error{ fmt::format(
-							    "'{}': could not convert request body to {}: {}", p.name, demangled_type_name<T>(), e.what()) };
+						    return std::make_tuple(false, p.name, nullptr);
 					    }
 				    }
-				    else if constexpr (std::is_same_v<P, request_parameter> && std::is_pointer_v<T>)
+				    else if constexpr (std::is_same_v<P, p::json>)
 				    {
-					    return &sources.req;
+					    return std::make_tuple(true, p.name, nullptr);
 				    }
-				    return T{};
+				    return std::make_tuple(false, std::string_view{}, nullptr);
 			    },
 			    descriptor);
+
+			if constexpr (std::is_same_v<T, request>)
+			{
+				assert(std::holds_alternative<p::request>(descriptor));
+				return std::cref(sources.req);
+			}
+			else if constexpr (std::is_same_v<T, url_view>)
+			{
+				assert(std::holds_alternative<p::url>(descriptor));
+				return std::cref(sources.url);
+			}
+			else if constexpr (ConvertibleFromBoostJson<T>)
+			{
+				assert(std::holds_alternative<p::json>(descriptor));
+				try
+				{
+					return boost::json::value_to<T>(boost::json::parse(sources.req.body()));
+				}
+				catch (const std::exception& e)
+				{
+					throw argument_error{ fmt::format(
+						"'{}': could not convert request body to type {}: {}", name, demangled_type_name<T>(), e.what()) };
+				}
+			}
+			else if (found)
+			{
+				auto sv = std::visit(
+				    [&](auto&& arg) -> std::string_view {
+					    using V = std::decay_t<decltype(arg)>;
+					    if constexpr (!std::is_same_v<V, std::nullptr_t>)
+					    {
+						    return arg;
+					    }
+					    else
+					    {
+						    return {}; // should not happen
+					    }
+				    },
+				    value);
+				try
+				{
+					return get_argument(sv, tag);
+				}
+				catch (const std::exception& e)
+				{
+					throw argument_error{ fmt::format("'{}': could not convert {} to type {}: {}",
+						                              name,
+						                              fmt::streamed(std::quoted(sv)),
+						                              demangled_type_name<T>(),
+						                              e.what()) };
+				}
+			}
+			else
+			{
+				return T{};
+			}
 		}
 
 		std::string get_argument(std::string_view in, const std::string* const)
 		{
 			return std::string{ in };
-		}
-
-		std::string_view get_argument(std::string_view in, const std::string_view* const)
-		{
-			return in;
-		}
-
-		string_view get_argument(std::string_view in, const string_view* const)
-		{
-			return in;
 		}
 
 		bool get_argument(std::string_view in, const bool* const)
@@ -313,17 +390,18 @@ class controller
 		template<typename T>
 		std::optional<T> get_argument(std::string_view in, const std::optional<T>* const)
 		{
-			return get_argument(in, static_cast<T*>(0));
+			return std::make_optional<T>(get_argument(in, static_cast<T*>(0)));
 		}
 
 		template<typename T>
 		boost::optional<T> get_argument(std::string_view in, const boost::optional<T>* const)
 		{
-			return get_argument(in, static_cast<T*>(0));
+			return boost::make_optional(get_argument(in, static_cast<T*>(0)));
 		}
 	};
 
-	std::shared_ptr<request_router> router_;
+	std::shared_ptr<request_router>         router_;
+	std::shared_ptr<exception_handler_base> exception_handler_;
 
 public:
 	virtual ~controller()
@@ -341,23 +419,10 @@ public:
 		return this->router_;
 	}
 
-	class exception_handler_base
-	{
-	public:
-		virtual ~exception_handler_base()
-		{
-		}
-
-		virtual response handle(const std::exception& e, const request& req) = 0;
-	};
-
 	void exception_handler(const std::shared_ptr<exception_handler_base>& value)
 	{
 		this->exception_handler_ = value;
 	}
-
-private:
-	std::shared_ptr<exception_handler_base> exception_handler_;
 
 protected:
 	template<class Callback, typename... ArgDescriptors>

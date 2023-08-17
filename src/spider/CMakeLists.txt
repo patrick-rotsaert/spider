@@ -56,6 +56,7 @@ add_project_library(${PROJECT_NAME}
 		json_response.cpp
 		file_response.cpp
 		error_response.cpp
+		empty_response.cpp
 		tracked_file.cpp
 		tracked_file.h
 		ifile_event_listener.cpp
@@ -81,6 +82,8 @@ add_project_library(${PROJECT_NAME}
 		json_response.h
 		file_response.h
 		error_response.h
+		empty_response.h
+		response_wrapper.h
 		ifile_event_listener.h
 		noop_file_event_listener.h
 		dispatcher.hpp
@@ -148,7 +151,7 @@ if(${PROJECT_NAME_UC}_INSTALL)
 endif()
 
 
-### FIXME: REMOVE
-add_executable(json_test json_test.cpp)
-target_link_libraries(json_test Boost::json)
-target_compile_features(json_test PRIVATE cxx_std_20)
+###
+#add_executable(json_test json_test.cpp)
+#target_link_libraries(json_test Boost::json)
+#target_compile_features(json_test PRIVATE cxx_std_20)

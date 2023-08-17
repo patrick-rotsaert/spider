@@ -95,6 +95,7 @@ private:
 		}
 		else
 		{
+			SPIDER_LOG(trace, "Connection accepted from {}", socket.remote_endpoint());
 			// Create the http session and run it
 			http_session::run(std::move(socket), this->request_handler_);
 		}

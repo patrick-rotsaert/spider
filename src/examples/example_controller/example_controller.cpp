@@ -3,6 +3,7 @@
 #include "spider/error_response.h"
 #include "spider/file_response.h"
 #include "spider/json_response.h"
+#include "spider/empty_response.h"
 #include "spider/noop_file_event_listener.h"
 #include "spider/logging.h"
 #include "spider/formatters.h"
@@ -14,6 +15,7 @@
 #include <boost/filesystem/path.hpp>
 #include <boost/describe.hpp>
 #include <boost/throw_exception.hpp>
+#include <boost/exception/all.hpp>
 
 #ifdef SPIDER_USE_SPDLOG
 #include <spdlog/spdlog.h>
@@ -60,52 +62,96 @@ struct error
 
 BOOST_DESCRIBE_STRUCT(error, (), (message, error_code))
 
+using ex_mesg   = boost::error_info<struct ex_mesg_, std::string>;
+using ex_code   = boost::error_info<struct ex_code_, int>;
+using ex_status = boost::error_info<struct ex_status_, http::status>;
+
+struct my_error : virtual boost::exception, virtual std::exception
+{
+	using mesg   = ex_mesg;
+	using code   = ex_code;
+	using status = ex_status;
+
+	const char* what() const noexcept override
+	{
+		if (const auto mesg = boost::get_error_info<ex_mesg>(*this))
+		{
+			return mesg->c_str();
+		}
+		else
+		{
+			return std::exception::what();
+		}
+	}
+};
+
 class api_exception_handler : public controller::exception_handler_base
 {
 	response handle(const std::exception& e, const request& req) override
 	{
 		auto err = error{ e.what() };
-		// TODO: get error code from exception
-		return json_response::create(req, status::internal_server_error, err);
+		if (const auto x = boost::get_error_info<ex_code>(e))
+		{
+			err.error_code = *x;
+		}
+		auto status = status::internal_server_error;
+		if (const auto x = boost::get_error_info<ex_status>(e))
+		{
+			status = *x;
+		}
+
+		return json_response::create(req, status, err);
 	}
 };
 
 class api_controller : public controller
 {
-	auto get_customer(std::uint64_t id, const std::optional<std::string>& serial, const boost::optional<std::string>& api_key)
+	auto get_customer(std::uint64_t                       id,
+	                  const std::optional<std::string>&   serial,
+	                  const boost::optional<std::string>& api_key,
+	                  const request&                      req)
 	{
-		slog(debug, "get customer id={}, serial={}, api_key={}", id, serial, api_key);
+		slog(debug, "{} customer id={}, serial={}, api_key={}", req.method_string(), id, serial, api_key);
 		return json_response::create(status::ok, customer{ id, "The Customer Inc" });
 	}
 
-	auto post_customer(const customer& c)
+	auto post_customer(const customer& c, const url_view& url)
 	{
-		slog(debug, "api post customer {}", c.id);
+		slog(debug, "api post customer {}, number of query parameters={}", c.id, url.params().size());
 		return json_response::create(status::ok, c);
 	}
 
-	response fail(const request* req)
+	auto noop()
 	{
-		slog(debug, "fail, method is {}", req->method_string());
-		throw std::runtime_error("The error message");
+		slog(debug, "noop");
+		return empty_response::create(status::ok);
+	}
+
+	response fail(const request& req)
+	{
+		slog(debug, "fail, method is {}", req.method_string());
+		throw my_error{} << my_error::mesg{ "The error message" } << my_error::code{ 42 } << my_error::status{ status::not_implemented };
 	}
 
 public:
 	explicit api_controller(const std::shared_ptr<request_router>& router = std::make_shared<request_router>())
 	    : controller{ router }
 	{
+		using p = controller::p;
+
 		this->register_action(
 		    { verb::get },                                  // HTTP methods
 		    boost::regex{ R"~(^customer/(?<id>\d+)/?$)~" }, // Path regex
 		    &api_controller::get_customer,                  // Callback
 		    // Descriptors for the callback arguments.
 		    // There must be a descriptor for each argument and they must be passed in the same order as the callback arguments.
-		    path_parameter{ "id" },         // Path parameters refer to a named sub-expression in the regex, i.e. `(?<id>\d+)`
-		                                    //                                                                        ~~
-		    query_parameter{ "serial" },    // Query parameters refer to the key name, e.g. http://localhost/api/customer/123?serial=123abc
-		                                    //                                                                                ~~~~~~
-		    header_parameter{ "x-api-key" } // Header parameters refer to the header name, e.g. `X-Api-Key: abc12345`
-		                                    //                                                   ~~~~~~~~~
+		    p::path{ "id" },          // Path parameters refer to a named sub-expression in the regex, i.e. `(?<id>\d+)`
+		                              //                                                                        ~~
+		    p::query{ "serial" },     // Query parameters refer to the key name, e.g. http://localhost/api/customer/123?serial=123abc
+		                              //                                                                                ~~~~~~
+		    p::header{ "x-api-key" }, // Header parameters refer to the header name, e.g. `X-Api-Key: abc12345`
+		                              //                                                   ~~~~~~~~~
+		    p::request{}              // Request parameter (const request&)
 		);
 
 		this->register_action(
@@ -114,15 +160,24 @@ public:
 		    &api_controller::post_customer,      // Callback
 		    // Descriptors for the callback arguments.
 		    // There must be a descriptor for each argument and they must be passed in the same order as the callback arguments.
-		    json_body{ "customer" } // Json parameters are deserialized from the request payload.
-		                            // The name ("customer") is used only in logging in case deserialization fails.
+		    p::json{ "customer" }, // Json parameters are deserialized from the request payload.
+		                           // The name ("customer") is used only in logging in case deserialization fails.
+		    p::url{}               // Url parameter (const url_view&)
+		);
+
+		this->register_action(
+		    {},                              // HTTP method(s). An empty set means all methods.
+		    boost::regex{ R"~(^fail/?$)~" }, // Path regex
+		    &api_controller::fail,           // Callback
+		    // Descriptors for the callback arguments.
+		    // There must be a descriptor for each argument and they must be passed in the same order as the callback arguments.
+		    p::request{} // Request parameter (const request&)
 		);
 
 		this->register_action({},                              // HTTP method(s). An empty set means all methods.
-		                      boost::regex{ R"~(^fail/?$)~" }, // Path regex
-		                      &api_controller::fail,           // Callback
-		                      request_parameter{}              //
-		);
+		                      boost::regex{ R"~(^noop/?$)~" }, // Path regex
+		                      &api_controller::noop            // Callback
+		);                                                     // No descriptors because callback does not take any arguments.
 
 		this->exception_handler(std::make_shared<api_exception_handler>());
 	}
@@ -159,11 +214,19 @@ public:
 	    : controller{ router }
 	    , doc_root_{ doc_root }
 	{
-		this->register_action({ verb::get },
-		                      boost::regex{ R"~(^(?<path>.+)/?$)~" },
-		                      &file_controller::get_file,
-		                      path_parameter{ "path" },
-		                      query_parameter{ "track" });
+		using p = controller::p;
+
+		this->register_action(
+		    { verb::get },                              // HTTP methods
+		    boost::regex{ R"~(^(?<the_path>.+)/?$)~" }, // Path regex
+		    &file_controller::get_file,                 // Callback
+		    // Descriptors for the callback arguments.
+		    // There must be a descriptor for each argument and they must be passed in the same order as the callback arguments.
+		    p::path{ "the_path" }, // Path parameters refer to a named sub-expression in the regex, i.e. `(?<the_path>.+)`
+		                           //                                                                        ~~~~~~~~
+		    p::query{ "track" }    // Query parameters refer to the key name, e.g. http://localhost/files/some/file?track=1
+		                           //                                                                               ~~~~~
+		);
 	}
 };
 

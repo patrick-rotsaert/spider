@@ -36,6 +36,7 @@ class http_session_impl : public std::enable_shared_from_this<http_session_impl>
 {
 	static constexpr std::size_t queue_limit = 8; // max responses
 
+	tcp::socket::endpoint_type        endpoint_;
 	beast::tcp_stream                 stream_;
 	std::shared_ptr<irequest_handler> request_handler_;
 	beast::flat_buffer                buffer_;
@@ -48,7 +49,8 @@ class http_session_impl : public std::enable_shared_from_this<http_session_impl>
 public:
 	// Take ownership of the socket
 	http_session_impl(tcp::socket&& socket, const std::shared_ptr<irequest_handler>& request_handler)
-	    : stream_{ std::move(socket) }
+	    : endpoint_{ socket.remote_endpoint() }
+	    , stream_{ std::move(socket) }
 	    , request_handler_{ request_handler }
 	    , buffer_{}
 	    , response_queue_{}
@@ -56,6 +58,11 @@ public:
 	{
 		static_assert(queue_limit > 0, "queue limit must be positive");
 		this->response_queue_.reserve(queue_limit);
+	}
+
+	~http_session_impl()
+	{
+		SPIDER_LOG(trace, "Ended session with {}", this->endpoint_);
 	}
 
 	// Start the session
