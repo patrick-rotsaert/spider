@@ -52,7 +52,7 @@ parsed_time_point parse_time_point(std::string_view in)
 	std::match_results<std::string_view::const_iterator> matches;
 	if (!std::regex_match(in.begin(), in.end(), matches, re) || matches.size() != 1 + 11)
 	{
-		throw std::invalid_argument{ "invalid time point format" };
+		BOOST_THROW_EXCEPTION(std::invalid_argument{ "invalid time point format" });
 	}
 
 	out.year    = string_to_number<int>(matches[1].str());
@@ -99,7 +99,7 @@ parsed_date parse_date(std::string_view in)
 	std::match_results<std::string_view::const_iterator> matches;
 	if (!std::regex_match(in.begin(), in.end(), matches, re) || matches.size() != 1 + 3)
 	{
-		throw std::invalid_argument{ "invalid date format" };
+		BOOST_THROW_EXCEPTION(std::invalid_argument{ "invalid date format" });
 	}
 
 	out.year  = string_to_number<int>(matches[1].str());
@@ -128,7 +128,7 @@ parsed_time_of_day parse_time_of_day(std::string_view in)
 	std::match_results<std::string_view::const_iterator> matches;
 	if (!std::regex_match(in.begin(), in.end(), matches, re) || matches.size() != 1 + 8)
 	{
-		throw std::invalid_argument{ "invalid time of day format" };
+		BOOST_THROW_EXCEPTION(std::invalid_argument{ "invalid time of day format" });
 	}
 
 	out.hours   = string_to_number<unsigned>(matches[1].str());
@@ -328,7 +328,6 @@ std::string time_of_day_to_string(const time_of_day& in)
 	return result;
 }
 
-#ifdef SPIDER_HAVE_BOOST_DATE_TIME
 void boost_ptime_to_string(const boost::posix_time::ptime& in, std::string& out)
 {
 	out = boost_ptime_to_string(in);
@@ -400,7 +399,7 @@ void string_to_boost_date(std::string_view in, boost::gregorian::date& out)
 
 	if (parsed.year < 0)
 	{
-		throw std::invalid_argument{ "boost date does not support negative years" };
+		BOOST_THROW_EXCEPTION(std::invalid_argument{ "boost date does not support negative years" });
 	}
 
 	out = boost::gregorian::date{ static_cast<short unsigned int>(parsed.year),
@@ -438,6 +437,5 @@ boost::posix_time::time_duration string_to_boost_time_duration(std::string_view 
 	string_to_boost_time_duration(in, out);
 	return out;
 }
-#endif
 
 } // namespace spider

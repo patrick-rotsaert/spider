@@ -66,6 +66,8 @@ add_project_library(${PROJECT_NAME}
 		formatters.h
 		conversions.cpp
 		log_response.cpp
+		exception.cpp
+		exception.h
 		demangle.cpp
 		demangle.h
 		demangled_type_name.h

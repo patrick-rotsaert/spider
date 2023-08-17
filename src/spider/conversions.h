@@ -12,6 +12,7 @@
 
 #include <boost/date_time/gregorian/greg_date.hpp>
 #include <boost/date_time/posix_time/ptime.hpp>
+#include <boost/throw_exception.hpp>
 
 #include <type_traits>
 #include <charconv>
@@ -34,13 +35,13 @@ inline void string_to_number(const char* first, const char* last, T& out)
 	std::from_chars_result res = std::from_chars(first, last, out);
 	if (res.ec != std::errc{})
 	{
-		throw std::system_error{ std::error_code(static_cast<int>(res.ec), std::generic_category()) };
+		BOOST_THROW_EXCEPTION(std::system_error{ std::error_code(static_cast<int>(res.ec), std::generic_category()) });
 	}
 	else if (res.ptr != last)
 	{
 		std::ostringstream msg;
 		msg << "conversion incomplete, remaining input is " << std::quoted(std::string_view{ res.ptr, last });
-		throw std::invalid_argument{ msg.str() };
+		BOOST_THROW_EXCEPTION(std::invalid_argument{ msg.str() });
 	}
 }
 

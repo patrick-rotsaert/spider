@@ -28,7 +28,6 @@
 using namespace spider;
 using namespace fmt::literals;
 
-// Note: structs must be described at namespace scope.
 struct customer
 {
 	std::uint64_t id;
@@ -51,53 +50,65 @@ struct customer
 	customer& operator=(customer&&) = default;
 };
 
+// Note: structs must be described at namespace scope.
 BOOST_DESCRIBE_STRUCT(customer, (), (id, name))
 
 /// Error handling
+
 struct error
 {
-	std::string        message;
-	std::optional<int> error_code;
-};
-
-BOOST_DESCRIBE_STRUCT(error, (), (message, error_code))
-
-using ex_mesg   = boost::error_info<struct ex_mesg_, std::string>;
-using ex_code   = boost::error_info<struct ex_code_, int>;
-using ex_status = boost::error_info<struct ex_status_, http::status>;
-
-struct my_error : virtual boost::exception, virtual std::exception
-{
-	using mesg   = ex_mesg;
-	using code   = ex_code;
-	using status = ex_status;
-
-	const char* what() const noexcept override
+	struct source_location
 	{
-		if (const auto mesg = boost::get_error_info<ex_mesg>(*this))
-		{
-			return mesg->c_str();
-		}
-		else
-		{
-			return std::exception::what();
-		}
-	}
+		std::optional<std::string_view> file;
+		std::optional<std::string_view> function;
+		std::optional<int>              line;
+	};
+
+	std::string                    message;
+	std::optional<int>             error_code;
+	std::optional<source_location> location;
 };
+
+// Note: structs must be described at namespace scope.
+BOOST_DESCRIBE_STRUCT(error, (), (message, error_code, location))
+BOOST_DESCRIBE_STRUCT(error::source_location, (), (file, function, line))
 
 class api_exception_handler : public controller::exception_handler_base
 {
 	response handle(const std::exception& e, const request& req) override
 	{
+		//slog(err, "{}", boost::diagnostic_information(e)); // very noisy
+		slog(err, "{}", e.what());
+
 		auto err = error{ e.what() };
+
 		if (const auto x = boost::get_error_info<ex_code>(e))
 		{
 			err.error_code = *x;
 		}
+
 		auto status = status::internal_server_error;
 		if (const auto x = boost::get_error_info<ex_status>(e))
 		{
 			status = *x;
+		}
+
+		auto loc = error::source_location{};
+		if (const auto x = boost::get_error_info<boost::throw_file>(e))
+		{
+			loc.file = *x;
+		}
+		if (const auto x = boost::get_error_info<boost::throw_function>(e))
+		{
+			loc.function = *x;
+		}
+		if (const auto x = boost::get_error_info<boost::throw_line>(e))
+		{
+			loc.line = *x;
+		}
+		if (loc.file || loc.function || loc.line)
+		{
+			err.location = std::move(loc);
 		}
 
 		return json_response::create(req, status, err);
@@ -106,6 +117,10 @@ class api_exception_handler : public controller::exception_handler_base
 
 class api_controller : public controller
 {
+	struct exception : public exception_base
+	{
+	};
+
 	auto get_customer(std::uint64_t                       id,
 	                  const std::optional<std::string>&   serial,
 	                  const boost::optional<std::string>& api_key,
@@ -130,7 +145,8 @@ class api_controller : public controller
 	response fail(const request& req)
 	{
 		slog(debug, "fail, method is {}", req.method_string());
-		throw my_error{} << my_error::mesg{ "The error message" } << my_error::code{ 42 } << my_error::status{ status::not_implemented };
+		BOOST_THROW_EXCEPTION(exception{} << exception::mesg{ "The error message" } << exception::code{ 42 }
+		                                  << exception::status{ status::not_implemented });
 	}
 
 public:
@@ -191,7 +207,16 @@ class file_controller : public controller
 	{
 		void on_close(const error_code& ec, std::uint64_t size, std::uint64_t pos) override
 		{
-			slog(info, "on close, size={}, pos={}", size, pos);
+			if (pos < size)
+			{
+				slog(warn, "Download incomplete after reading {} of {} bytes", pos, size);
+			}
+			else
+			{
+				// This means the file was fully read, it does not mean that the client downloaded
+				// the file completely, the last chunk may still have been lost.
+				slog(info, "Downloaded file of {} bytes was read completely", size);
+			}
 		}
 	};
 

@@ -22,9 +22,12 @@
 #include "spider/demangled_type_name.h"
 #include "spider/logging.h"
 #include "spider/formatters.h"
+#include "spider/exception.h"
 
 #include <boost/beast/core/string.hpp>
 #include <boost/throw_exception.hpp>
+#include <boost/exception/get_error_info.hpp>
+#include <boost/exception/errinfo_nested_exception.hpp>
 
 #include <fmt/format.h>
 
@@ -101,24 +104,24 @@ private:
 		const svmatch&     match;
 	};
 
-	class argument_error : public std::invalid_argument
+	class argument_error : public exception_base
 	{
 	public:
 		explicit argument_error(const std::string& m)
-		    : std::invalid_argument{ m }
+		    : exception_base{ m }
 		{
 		}
 	};
 
-	template<typename Dispatcher, typename...>
+	template<typename Controller, typename...>
 	struct handler
 	{
 	};
 
-	template<typename Dispatcher, typename Result, typename... Args>
-	struct handler<Result (Dispatcher::*)(Args...)>
+	template<typename Controller, typename Result, typename... Args>
+	struct handler<Result (Controller::*)(Args...)>
 	{
-		using Method     = Result (Dispatcher::*)(Args...);
+		using Method     = Result (Controller::*)(Args...);
 		using ArgsTuple  = std::tuple<typename std::remove_const_t<typename std::remove_reference_t<Args>>...>;
 		using ResultType = typename std::remove_const_t<typename std::remove_reference_t<Result>>;
 		using Callback   = std::function<ResultType(Args...)>;
@@ -136,13 +139,13 @@ private:
 			static_assert(sizeof...(descriptors) == sizeof...(Args),
 			              "The number of descriptors must be equal to the number of arguments of the callback function");
 
-			auto dispatcher = dynamic_cast<Dispatcher*>(owner);
-			if (dispatcher == nullptr)
+			auto controller = dynamic_cast<Controller*>(owner);
+			if (controller == nullptr)
 			{
-				BOOST_THROW_EXCEPTION(std::invalid_argument{ "Callback must be provided by a class derived from dispatcher" });
+				BOOST_THROW_EXCEPTION(std::invalid_argument{ "Callback must be provided by a class derived from controller" });
 			}
 
-			this->callback_ = [dispatcher, method](Args... args) { return (dispatcher->*method)(args...); };
+			this->callback_ = [controller, method](Args... args) { return (controller->*method)(args...); };
 
 			if constexpr (sizeof...(descriptors) > 0)
 			{
@@ -194,7 +197,7 @@ private:
 			}
 		}
 
-		response_wrapper call(const parameter_sources& sources)
+		ResultType call(const parameter_sources& sources)
 		{
 			try
 			{
@@ -202,9 +205,11 @@ private:
 			}
 			catch (const argument_error& e)
 			{
-				// argument_error is private, so we're sure the exception comes from arguments collection
-				SPIDER_LOG(err, "Could not collect arguments: {}", e.what());
-				return bad_request::create();
+				// The type `argument_error` is private, so we're sure that the throw site is in the arguments collection.
+				// All other exception types will not be catched.
+				// Set the http status in the exception
+				e << ex_status{ status::bad_request };
+				throw;
 			}
 		}
 
@@ -234,11 +239,11 @@ private:
 					    const auto& m = sources.match[p.name];
 					    if (m.matched)
 					    {
-						    return std::make_tuple(true, p.name, std::string_view{ m.first, m.second });
+						    return std::make_tuple(true, std::string_view{ p.name }, std::string_view{ m.first, m.second });
 					    }
 					    else
 					    {
-						    return std::make_tuple(false, p.name, nullptr);
+						    return std::make_tuple(false, std::string_view{ p.name }, nullptr);
 					    }
 				    }
 				    else if constexpr (std::is_same_v<P, p::query>)
@@ -246,11 +251,11 @@ private:
 					    const auto it = sources.url.params().find(p.name);
 					    if (it != sources.url.params().end())
 					    {
-						    return std::make_tuple(true, p.name, (*it).value);
+						    return std::make_tuple(true, std::string_view{ p.name }, (*it).value);
 					    }
 					    else
 					    {
-						    return std::make_tuple(false, p.name, nullptr);
+						    return std::make_tuple(false, std::string_view{ p.name }, nullptr);
 					    }
 				    }
 				    else if constexpr (std::is_same_v<P, p::header>)
@@ -258,16 +263,16 @@ private:
 					    const auto it = sources.req.find(p.name);
 					    if (it != sources.req.end())
 					    {
-						    return std::make_tuple(true, p.name, sources.req[p.name]);
+						    return std::make_tuple(true, std::string_view{ p.name }, sources.req[p.name]);
 					    }
 					    else
 					    {
-						    return std::make_tuple(false, p.name, nullptr);
+						    return std::make_tuple(false, std::string_view{ p.name }, nullptr);
 					    }
 				    }
 				    else if constexpr (std::is_same_v<P, p::json>)
 				    {
-					    return std::make_tuple(true, p.name, nullptr);
+					    return std::make_tuple(true, std::string_view{ p.name }, nullptr);
 				    }
 				    return std::make_tuple(false, std::string_view{}, nullptr);
 			    },
@@ -292,8 +297,10 @@ private:
 				}
 				catch (const std::exception& e)
 				{
-					throw argument_error{ fmt::format(
-						"'{}': could not convert request body to type {}: {}", name, demangled_type_name<T>(), e.what()) };
+					BOOST_THROW_EXCEPTION(
+					    argument_error{
+					        fmt::format("'{}': could not convert request body to type {}: {}", name, demangled_type_name<T>(), e.what()) }
+					    << boost::errinfo_nested_exception{ boost::current_exception() });
 				}
 			}
 			else if (found)
@@ -317,11 +324,12 @@ private:
 				}
 				catch (const std::exception& e)
 				{
-					throw argument_error{ fmt::format("'{}': could not convert {} to type {}: {}",
-						                              name,
-						                              fmt::streamed(std::quoted(sv)),
-						                              demangled_type_name<T>(),
-						                              e.what()) };
+					BOOST_THROW_EXCEPTION(argument_error{ fmt::format("'{}': could not convert {} to type {}: {}",
+					                                                  name,
+					                                                  fmt::streamed(std::quoted(sv)),
+					                                                  demangled_type_name<T>(),
+					                                                  e.what()) }
+					                      << boost::errinfo_nested_exception{ boost::current_exception() });
 				}
 			}
 			else
@@ -446,14 +454,21 @@ protected:
 			    }
 			    catch (const std::exception& e)
 			    {
-				    SPIDER_LOG(err, "{}", e.what());
 				    if (this->exception_handler_)
 				    {
 					    return this->exception_handler_->handle(e, req);
 				    }
 				    else
 				    {
-					    return internal_server_error::create(req);
+					    SPIDER_LOG(err, "{}", e.what());
+					    if (const auto status = boost::get_error_info<ex_status>(e))
+					    {
+						    return error_response_factory::create(req, *status);
+					    }
+					    else
+					    {
+						    return internal_server_error::create(req);
+					    }
 				    }
 			    }
 		    });
