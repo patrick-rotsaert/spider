@@ -84,9 +84,7 @@ public:
 	class exception_handler_base
 	{
 	public:
-		virtual ~exception_handler_base()
-		{
-		}
+		virtual ~exception_handler_base();
 
 		virtual response handle(const std::exception& e, const request& req) = 0;
 	};
@@ -107,10 +105,7 @@ private:
 	class argument_error : public exception_base
 	{
 	public:
-		explicit argument_error(const std::string& m)
-		    : exception_base{ m }
-		{
-		}
+		explicit argument_error(const std::string& m);
 	};
 
 	template<typename Controller, typename...>
@@ -190,10 +185,11 @@ private:
 			if (!ok)
 			{
 				const auto descriptor_type_name = std::visit([](auto&& arg) { return demangled_type_name(arg); }, descriptor);
-				BOOST_THROW_EXCEPTION(std::logic_error{ fmt::format("Descriptor type {} is incompatible with argument type {} for method{}",
-				                                                    descriptor_type_name,
-				                                                    demangled_type_name<T>(),
-				                                                    demangled_type_name<Method>()) });
+				BOOST_THROW_EXCEPTION(
+				    std::logic_error{ fmt::format("Descriptor type {} is incompatible with argument type {} for method {}",
+				                                  descriptor_type_name,
+				                                  demangled_type_name<T>(),
+				                                  demangled_type_name<Method>()) });
 			}
 		}
 
@@ -412,25 +408,13 @@ private:
 	std::shared_ptr<exception_handler_base> exception_handler_;
 
 public:
-	virtual ~controller()
-	{
-	}
+	virtual ~controller();
 
-	explicit controller(std::shared_ptr<request_router> router)
-	    : router_{ std::move(router) }
-	    , exception_handler_{}
-	{
-	}
+	explicit controller(std::shared_ptr<request_router> router);
 
-	const std::shared_ptr<request_router>& router() const
-	{
-		return this->router_;
-	}
+	const std::shared_ptr<request_router>& router() const;
 
-	void exception_handler(const std::shared_ptr<exception_handler_base>& value)
-	{
-		this->exception_handler_ = value;
-	}
+	void exception_handler(const std::shared_ptr<exception_handler_base>& value);
 
 protected:
 	template<class Callback, typename... ArgDescriptors>

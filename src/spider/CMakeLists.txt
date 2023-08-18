@@ -61,6 +61,7 @@ add_project_library(${PROJECT_NAME}
 		tracked_file.h
 		ifile_event_listener.cpp
 		noop_file_event_listener.cpp
+		controller.cpp
 		ilogger.cpp
 		logging.cpp
 		formatters.h
