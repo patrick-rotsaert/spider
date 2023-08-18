@@ -73,8 +73,6 @@ auto streamed(const T& value) -> detail::streamed_view<T>
 
 #endif
 
-// FIXME: move implementations to cpp
-
 template<typename T>
 struct formatter<std::optional<T>> : formatter<T>
 {
