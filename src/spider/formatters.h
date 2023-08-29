@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "spider/conversions.h"
+
 #include <fmt/core.h>
 #include <fmt/ostream.h>
 #include <boost/optional.hpp>
@@ -19,10 +21,15 @@
 #include <boost/utility/string_view.hpp>
 #include <boost/beast/core/string_type.hpp>
 #include <boost/system/error_code.hpp>
+#include <boost/exception/diagnostic_information.hpp>
+#include <boost/describe.hpp>
+#include <boost/mp11.hpp>
 
+#include <type_traits>
 #include <filesystem>
 #include <iomanip>
 #include <optional>
+#include <chrono>
 
 namespace fmt {
 
@@ -176,11 +183,29 @@ struct formatter<boost::gregorian::date> : formatter<string_view>
 };
 
 template<>
+struct formatter<std::chrono::year_month_day> : formatter<string_view>
+{
+	auto format(const std::chrono::year_month_day& value, format_context& ctx) const
+	{
+		return fmt::format_to(ctx.out(), "{}", spider::date_to_string(value));
+	}
+};
+
+template<>
 struct formatter<boost::system::error_code> : formatter<string_view>
 {
 	auto format(const boost::system::error_code& value, format_context& ctx) const
 	{
 		return formatter<string_view>::format(value.to_string(), ctx);
+	}
+};
+
+template<>
+struct formatter<std::exception> : formatter<string_view>
+{
+	auto format(const std::exception& value, format_context& ctx) const
+	{
+		return formatter<string_view>::format(boost::diagnostic_information(value), ctx);
 	}
 };
 
@@ -190,6 +215,58 @@ struct formatter<boost::asio::ip::basic_endpoint<InternetProtocol>> : formatter<
 	auto format(const boost::asio::ip::basic_endpoint<InternetProtocol>& value, format_context& ctx) const
 	{
 		return fmt::format_to(ctx.out(), "{}", fmt::streamed(value));
+	}
+};
+
+template<class T>
+struct formatter<T,
+                 char,
+                 std::enable_if_t<boost::describe::has_describe_bases<T>::value && boost::describe::has_describe_members<T>::value &&
+                                  !std::is_union_v<T>>> : formatter<string_view>
+{
+	auto format(T const& t, format_context& ctx) const
+	{
+		using namespace boost::describe;
+
+		using Bd = describe_bases<T, mod_any_access>;
+		using Md = describe_members<T, mod_any_access>;
+
+		auto out = ctx.out();
+
+		*out++ = '{';
+
+		bool first = true;
+
+		boost::mp11::mp_for_each<Bd>([&](auto D) {
+			if (!first)
+			{
+				*out++ = ',';
+			}
+
+			first = false;
+
+			out = fmt::format_to(out, " {}", (typename decltype(D)::type const&)t);
+		});
+
+		boost::mp11::mp_for_each<Md>([&](auto D) {
+			if (!first)
+			{
+				*out++ = ',';
+			}
+
+			first = false;
+
+			out = fmt::format_to(out, " .{}={}", D.name, t.*D.pointer);
+		});
+
+		if (!first)
+		{
+			*out++ = ' ';
+		}
+
+		*out++ = '}';
+
+		return out;
 	}
 };
 

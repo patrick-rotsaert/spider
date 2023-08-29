@@ -46,8 +46,8 @@ parsed_time_point parse_time_point(std::string_view in)
 {
 	parsed_time_point out{};
 
-	static const std::regex re{ R"(^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(\.\d*)?( ?([+-]\d{2})(:?(\d{2}))?)?$)" };
-	//                              1       2       3       4       5       6      7       8  9          10 11
+	static const std::regex re{ R"(^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(\.\d*)?( ?([+-]\d{2})(:?(\d{2}))?|Z)?$)" };
+	//                              1       2       3          4       5       6      7       8  9          10 11
 
 	std::match_results<std::string_view::const_iterator> matches;
 	if (!std::regex_match(in.begin(), in.end(), matches, re) || matches.size() != 1 + 11)
@@ -93,8 +93,8 @@ parsed_date parse_date(std::string_view in)
 {
 	parsed_date out;
 
-	static const std::regex re{ R"(^(-?\d{1,4})-(\d{2})-(\d{2})$)" };
-	//                              1       2       3
+	static const std::regex re{ R"(^(-?\d{1,4})-?(\d{2})-?(\d{2})$)" };
+	//                              1            2        3
 
 	std::match_results<std::string_view::const_iterator> matches;
 	if (!std::regex_match(in.begin(), in.end(), matches, re) || matches.size() != 1 + 3)
@@ -237,7 +237,7 @@ time_of_day string_to_time_of_day(std::string_view in)
 	return result;
 }
 
-void time_point_to_string(const time_point& in, std::string& out)
+void time_point_to_string(const time_point& in, std::string& out, const char date_time_separator)
 {
 	// TODO: use std::format when it becomes available in libstdc++
 	using namespace std::chrono;
@@ -249,10 +249,11 @@ void time_point_to_string(const time_point& in, std::string& out)
 	{
 		out.resize(10 * 3 + 19 * 4 + 6 + 1);
 		std::sprintf(out.data(),
-		             "%04d-%02u-%02u %02ld:%02ld:%02ld.%06ld",
+		             "%04d-%02u-%02u%c%02ld:%02ld:%02ld.%06ld",
 		             static_cast<int>(date.year()),
 		             static_cast<unsigned>(date.month()),
 		             static_cast<unsigned>(date.day()),
+		             date_time_separator,
 		             static_cast<long>(time.hours().count()),
 		             static_cast<long>(time.minutes().count()),
 		             static_cast<long>(time.seconds().count()),
@@ -262,10 +263,11 @@ void time_point_to_string(const time_point& in, std::string& out)
 	{
 		out.resize(10 * 3 + 19 * 3 + 5 + 1);
 		std::sprintf(out.data(),
-		             "%04d-%02u-%02u %02ld:%02ld:%02ld",
+		             "%04d-%02u-%02u%c%02ld:%02ld:%02ld",
 		             static_cast<int>(date.year()),
 		             static_cast<unsigned>(date.month()),
 		             static_cast<unsigned>(date.day()),
+		             date_time_separator,
 		             static_cast<long>(time.hours().count()),
 		             static_cast<long>(time.minutes().count()),
 		             static_cast<long>(time.seconds().count()));
@@ -273,10 +275,10 @@ void time_point_to_string(const time_point& in, std::string& out)
 	out.resize(std::strlen(out.data()));
 }
 
-std::string time_point_to_string(const time_point& in)
+std::string time_point_to_string(const time_point& in, const char date_time_separator)
 {
 	std::string result;
-	time_point_to_string(in, result);
+	time_point_to_string(in, result, date_time_separator);
 	return result;
 }
 
@@ -328,20 +330,20 @@ std::string time_of_day_to_string(const time_of_day& in)
 	return result;
 }
 
-void boost_ptime_to_string(const boost::posix_time::ptime& in, std::string& out)
+void boost_ptime_to_string(const boost::posix_time::ptime& in, std::string& out, const char date_time_separator)
 {
-	out = boost_ptime_to_string(in);
+	out = boost_ptime_to_string(in, date_time_separator);
 }
 
-std::string boost_ptime_to_string(const boost::posix_time::ptime& in)
+std::string boost_ptime_to_string(const boost::posix_time::ptime& in, const char date_time_separator)
 {
 	auto tmp = boost::posix_time::to_iso_extended_string(in);
 	// Expected format of tmp is YYYY-MM-DDTHH:MM:SS[.fffffffff]
 	// Format to return is YYYY-MM-DD HH:MM:SS.fffffffff
 	// So just replace the 'T' with a space.
-	if (tmp.length() >= 19u && tmp[10u] == 'T')
+	if (date_time_separator != 'T' && tmp.length() >= 19u && tmp[10u] == 'T')
 	{
-		tmp[10u] = ' ';
+		tmp[10u] = date_time_separator;
 	}
 	return tmp;
 }

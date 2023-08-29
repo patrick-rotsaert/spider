@@ -7,8 +7,13 @@
 
 cmake_minimum_required(VERSION 3.19)
 
-# Boost.URL was added in version 1.82
-find_package(Boost 1.82.0 REQUIRED COMPONENTS system url filesystem json date_time)
+# FIXME: improve this
+if(TARGET Boost::system AND TARGET Boost::url AND TARGET Boost::filesystem AND TARGET Boost::json AND TARGET Boost::date_time)
+	message("Boost targets already defined")
+else()
+	# Boost.URL was added in version 1.81
+	find_package(Boost 1.81 REQUIRED COMPONENTS system url filesystem json date_time)
+endif()
 
 include(FetchContent)
 
@@ -72,6 +77,9 @@ add_project_library(${PROJECT_NAME}
 		demangle.cpp
 		demangle.h
 		demangled_type_name.h
+		tag_invoke/time_point.cpp
+		tag_invoke/date.cpp
+		tag_invoke/time_duration.cpp
 		version.cpp
 		version.h.in
 		config.h.in
@@ -96,6 +104,9 @@ add_project_library(${PROJECT_NAME}
 		logging.h
 		log_level.h
 		log_response.h
+		tag_invoke/time_point.h
+		tag_invoke/date.h
+		tag_invoke/time_duration.h
 
 	PUBLIC_LIBRARIES
 		Boost::system
@@ -105,17 +116,21 @@ add_project_library(${PROJECT_NAME}
 		Boost::date_time
 		fmt::fmt
 
-	# PRIVATE_LIBRARIES
-
-	# UNIT_TEST_SOURCES
-	# 	...
+	UNIT_TEST_SOURCES
+		test/unit/test_conversions.cpp
 
 	PUBLIC_INCLUDE_DIRS
 		${CMAKE_CURRENT_BINARY_DIR}/.. # for configured headers, see below
 )
 
+if(${PROJECT_NAME_UC}_TEST)
+	set(${PROJECT_NAME}_TARGET ${PROJECT_NAME}_objects)
+else()
+	set(${PROJECT_NAME}_TARGET ${PROJECT_NAME})
+endif()
+
 if(TARGET spdlog::spdlog)
-	target_sources(${PROJECT_NAME} PRIVATE spdlog_logger.cpp spdlog_logger.h)
+	target_sources(${${PROJECT_NAME}_TARGET} PRIVATE spdlog_logger.cpp spdlog_logger.h)
 	target_link_libraries(${PROJECT_NAME} PUBLIC spdlog::spdlog)
 	if(${PROJECT_NAME_UC}_INSTALL)
 		install_project_header(spdlog_logger.h ${PROJECT_SRC_DIR})
@@ -154,7 +169,11 @@ if(${PROJECT_NAME_UC}_INSTALL)
 endif()
 
 
-###
+##
 #add_executable(json_test json_test.cpp)
-#target_link_libraries(json_test Boost::json)
+#target_link_libraries(json_test Boost::json fmt::fmt)
 #target_compile_features(json_test PRIVATE cxx_std_20)
+#target_compile_options(json_test PRIVATE
+#	"$<$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>:$<BUILD_INTERFACE:-Wall;-Wextra;-pedantic;-Werror>>"
+#	"$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:$<BUILD_INTERFACE:/W4;/WX>>"
+#)

@@ -71,8 +71,8 @@ date SPIDER_EXPORT string_to_date(std::string_view in);
 void SPIDER_EXPORT        string_to_time_of_day(std::string_view in, time_of_day& out);
 time_of_day SPIDER_EXPORT string_to_time_of_day(std::string_view in);
 
-void SPIDER_EXPORT        time_point_to_string(const time_point& in, std::string& out);
-std::string SPIDER_EXPORT time_point_to_string(const time_point& in);
+void SPIDER_EXPORT        time_point_to_string(const time_point& in, std::string& out, const char date_time_separator = 'T');
+std::string SPIDER_EXPORT time_point_to_string(const time_point& in, const char date_time_separator = 'T');
 
 void SPIDER_EXPORT        date_to_string(const date& in, std::string& out);
 std::string SPIDER_EXPORT date_to_string(const date& in);
@@ -83,8 +83,8 @@ std::string SPIDER_EXPORT time_of_day_to_string(const time_of_day& in);
 void SPIDER_EXPORT                     string_to_boost_ptime(std::string_view in, boost::posix_time::ptime& out);
 boost::posix_time::ptime SPIDER_EXPORT string_to_boost_ptime(std::string_view in);
 
-void SPIDER_EXPORT        boost_ptime_to_string(const boost::posix_time::ptime& in, std::string& out);
-std::string SPIDER_EXPORT boost_ptime_to_string(const boost::posix_time::ptime& in);
+void SPIDER_EXPORT        boost_ptime_to_string(const boost::posix_time::ptime& in, std::string& out, const char date_time_separator = 'T');
+std::string SPIDER_EXPORT boost_ptime_to_string(const boost::posix_time::ptime& in, const char date_time_separator = 'T');
 
 void SPIDER_EXPORT                   string_to_boost_date(std::string_view in, boost::gregorian::date& out);
 boost::gregorian::date SPIDER_EXPORT string_to_boost_date(std::string_view in);

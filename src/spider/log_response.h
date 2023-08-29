@@ -9,7 +9,7 @@
 
 namespace spider {
 
-http::response<http::string_body>&& SPIDER_EXPORT log_response(http::response<http::string_body>&& res);
-http::response<http::empty_body>&& SPIDER_EXPORT  log_response(http::response<http::empty_body>&& res);
+SPIDER_EXPORT http::response<http::string_body>&& log_response(http::response<http::string_body>&& res);
+SPIDER_EXPORT http::response<http::empty_body>&& log_response(http::response<http::empty_body>&& res);
 
 } // namespace spider

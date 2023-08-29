@@ -115,7 +115,7 @@ create_impl(const request& req, const boost::filesystem::path& doc_root, beast::
 
 	if (req.method() == verb::head)
 	{
-		http::response<http::empty_body> res{ http::status::ok, req.version() };
+		auto res = http::response<http::empty_body>{ http::status::ok, req.version() };
 		res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
 		res.set(http::field::content_type, mime_type(file_path));
 		res.content_length(size);
@@ -123,7 +123,8 @@ create_impl(const request& req, const boost::filesystem::path& doc_root, beast::
 		return log_response(std::move(res));
 	}
 
-	http::response<FileBody> res{ std::piecewise_construct, std::make_tuple(std::move(body)), std::make_tuple(status::ok, req.version()) };
+	auto res =
+	    http::response<FileBody>{ std::piecewise_construct, std::make_tuple(std::move(body)), std::make_tuple(status::ok, req.version()) };
 	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
 	res.set(http::field::content_type, mime_type(file_path));
 	res.content_length(size);
@@ -171,7 +172,7 @@ response_wrapper create_impl(const boost::filesystem::path& doc_root, beast::str
 
 	const auto size = body.size();
 
-	http::response<FileBody> res{ std::piecewise_construct, std::make_tuple(std::move(body)) };
+	auto res = http::response<FileBody>{ std::piecewise_construct, std::make_tuple(std::move(body)) };
 	res.result(status::ok);
 	res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
 	res.set(http::field::content_type, mime_type(file_path));
